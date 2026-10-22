@@ -80,10 +80,9 @@ test('GitHub Pages subpath installs and stays playable with the origin offline',
     await expect(page.locator('#board')).toBeVisible();
     await page.keyboard.press('ArrowLeft');
     await expect(page.locator('#score')).toHaveText('4');
-    await expect(page.locator('#moves')).toHaveText('1 手');
     await page.goto(base + 'index.html');
     await expect(page.locator('#score')).toHaveText('4');
-    await expect(page.locator('#save-label')).toHaveText('自動セーブ');
+    await expect(page.locator('#storage-warning')).toBeHidden();
     const restored = await page.evaluate(() => JSON.parse(localStorage.getItem('pocket-2048.save.v1')).state);
     expect(restored.board[0]).toBe(4);
     expect(restored.moves).toBe(1);

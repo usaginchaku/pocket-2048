@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../dist/sw.js', import.meta.url), 'utf8');
 
-function worker(scope = 'https://example.com/games/2048/') {
+function worker(scope = 'https://example.com/games/2048/', precache = async () => {}) {
   const events = {};
   const stored = new Map();
   const deleted = [];
@@ -14,7 +14,7 @@ function worker(scope = 'https://example.com/games/2048/') {
   let claimed = false;
   let skipped = false;
   const cache = {
-    addAll: async (requests) => { precacheRequests = requests; },
+    addAll: async (requests) => { precacheRequests = requests; await precache(); },
     match: async (url) => stored.get(url),
   };
   vm.runInNewContext(source, {
@@ -28,7 +28,7 @@ function worker(scope = 'https://example.com/games/2048/') {
     },
     caches: {
       open: async () => cache,
-      keys: async () => ['unrelated-cache', 'pocket-2048-v0', 'pocket-2048-v1'],
+      keys: async () => ['unrelated-cache', 'pocket-2048-v0', 'pocket-2048-v1', 'pocket-2048-v2'],
       delete: async (name) => { deleted.push(name); },
     },
     fetch: async (request) => { fetched.push(request); return 'network'; },
@@ -65,13 +65,30 @@ test('installation precaches every app asset relative to its deployment scope', 
     assert.equal(entry.cache, 'reload');
     assert.equal(entry.credentials, 'same-origin');
   }
-  assert.equal(w.skipped, false, 'an installing update must not interrupt an active game');
+  assert.equal(w.skipped, true, 'a complete shell is ready for the next navigation');
+});
+
+test('updates activate only after every shell asset has cached successfully', async () => {
+  let release;
+  const barrier = new Promise(resolve => { release = resolve; });
+  const w = worker(undefined, () => barrier);
+  const installation = dispatchLifecycle(w, 'install');
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(w.skipped, false);
+  release();
+  await installation;
+  assert.equal(w.skipped, true);
+
+  const broken = worker(undefined, async () => { throw new Error('offline'); });
+  await assert.rejects(dispatchLifecycle(broken, 'install'), /offline/);
+  assert.equal(broken.skipped, false, 'failed updates must leave the old version active');
 });
 
 test('activation deletes only old game caches and claims the first loaded game', async () => {
   const w = worker();
   await dispatchLifecycle(w, 'activate');
-  assert.deepEqual(w.deleted, ['pocket-2048-v0']);
+  assert.deepEqual(w.deleted, ['pocket-2048-v0', 'pocket-2048-v1']);
   assert.equal(w.claimed, true);
 });
 
@@ -99,7 +116,7 @@ test('external requests, writes, login and unknown routes remain untouched', () 
   assert.equal(request(w, 'https://example.com/auth/callback', { mode: 'navigate' }), undefined);
 });
 
-test('an update activates early only after an explicit message', async () => {
+test('an explicit activation message remains supported and unknown messages are ignored', async () => {
   const w = worker();
   await dispatchLifecycle(w, 'message', { data: { type: 'OTHER' } });
   assert.equal(w.skipped, false);

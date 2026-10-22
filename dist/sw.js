@@ -1,5 +1,5 @@
 /* Bump VERSION whenever any app-shell asset changes. */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE_PREFIX = 'pocket-2048-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}`;
 const BASE = new URL('./', self.registration.scope);
@@ -25,7 +25,9 @@ self.addEventListener('install', (event) => {
       cache: 'reload',
       credentials: 'same-origin',
     })));
-    // A new version waits until existing game windows close. Never reload a game.
+    // The shell is fully loaded, and the save format is unchanged. Activate the
+    // cache for the next navigation without reloading any open game window.
+    await self.skipWaiting();
   })());
 });
 

@@ -4,7 +4,7 @@ Verified on 2026-10-22 in a Linux browser test environment.
 
 ## Rules, persistence, and offline cache
 
-33 automated checks passed with `node --test --test-isolation=none test/*.test.js`:
+34 automated checks passed with `node --test --test-isolation=none test/*.test.js`:
 
 - All directions, merge ordering, prevention of double merges, score calculation, and non-mutating updates.
 - New tile distribution, unchanged moves, win/continue and game-over behavior.
@@ -14,13 +14,15 @@ Verified on 2026-10-22 in a Linux browser test environment.
 
 ## Browser behavior
 
-Chromium and WebKit 26.0 cover 12 scenarios each: swipes, rapid queued input (including a no-op between valid moves), reload/undo, reset confirmation, win/continue, game over, help and direction buttons, offline restart, denied storage, corrupt saves, and mobile layout.
+Chromium and WebKit 26.0 cover 15 scenarios each: swipes, rapid queued input (including a no-op between valid moves), reload/undo, reset confirmation, win/continue, game over, screen-reader direction buttons, offline restart, denied storage, corrupt saves, single-screen layout, numeric-only visible text, zoom prevention, and GitHub Pages subpaths.
 
 Chromium swipe tests use browser-dispatched touch events. WebKit swipe tests exercise PointerEvent handlers; they do not emulate physical iOS touch hardware.
 
 Offline operation was independently verified by stopping the HTTP server, confirming the server was unreachable, and then reloading, navigating, playing and saving from the service-worker cache. This avoids a Linux Playwright/WebKit `context.setOffline(true)` failure that blocks cached requests before the service worker can handle them.
 
-Mobile layouts were visually inspected at 390×844 and 320×568. No horizontal overflow was observed. The smaller viewport scrolls vertically for supplementary content.
+The complete board, scores and controls fit without vertical or horizontal scrolling at 320×460, 320×568, 375×550, 390×664, 390×844, 430×932, 844×390 and 667×320. Screenshots were inspected at 390×664, 320×460 and 667×320. Normal visible text consists of numbers only. Chromium's real two-finger input and double tap leave visualViewport.scale at 1 and do not accidentally move a tile; WebKit tests its Safari gesture-prevention and multitouch handlers. Movement uses short transform animations without per-move layout measurements.
+
+An upgrade from the original v1 files to v2 was also verified in Chromium and WebKit. The new worker activated without reloading the running game, removed the old cache, and preserved the save. After one more move and a reload, the minimal UI restored the exact saved state without browser errors.
 
 ## Remaining physical-device verification
 

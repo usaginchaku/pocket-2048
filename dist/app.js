@@ -4,6 +4,7 @@ import { readSave, writeSave } from './storage.js';
 const $ = (id) => document.getElementById(id);
 const board = $('board');
 const tiles = $('tiles');
+const dialog = $('new-dialog');
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let storage;
 try { storage = window.localStorage; } catch { storage = null; }
@@ -12,60 +13,49 @@ let state = saved.state || createGame();
 let previous = saved.previous;
 let best = Math.max(saved.best, state.score);
 let animationTimer = null;
-let gainTimer = null;
+let animations = [];
 let inputQueue = [];
 let gesture = null;
+let multiTouch = false;
 let lastResult = '';
-let lastSaved = false;
+let tileStep = (board.clientWidth - 8) / 4;
 
+// Fixed background cells; only the sixteen small tile faces change during play.
 document.querySelector('.grid').append(...Array.from({ length: 16 }, () => {
   const cell = document.createElement('div'); cell.className = 'cell'; return cell;
 }));
 
 function persist() {
   best = Math.max(best, state.score);
-  lastSaved = writeSave(storage, state, previous, best);
-  $('save-label').textContent = lastSaved ? '自動セーブ' : '保存できません';
-  $('save-status').classList.toggle('error', !lastSaved);
-  $('storage-warning').hidden = lastSaved;
-}
-
-function placeTile(tile, index) {
-  tile.style.setProperty('--col', index % 4);
-  tile.style.setProperty('--row', Math.floor(index / 4));
-}
-
-function makeTile(value, index) {
-  const tile = document.createElement('div');
-  const digits = String(value).length;
-  tile.className = 'tile' + (digits >= 3 ? ` digits-${digits > 5 ? 'many' : digits}` : '') + (value > 2048 ? ' high-tile' : '');
-  tile.dataset.value = value;
-  tile.dataset.index = index;
-  tile.textContent = value;
-  placeTile(tile, index);
-  return tile;
+  $('storage-warning').hidden = writeSave(storage, state, previous, best);
 }
 
 function drawBoard(spawnedIndex = null, mergedIndices = []) {
   tiles.replaceChildren(...state.board.flatMap((value, index) => {
     if (!value) return [];
-    const tile = makeTile(value, index);
+    const tile = document.createElement('div');
+    const face = document.createElement('span');
+    const digits = String(value).length;
+    tile.className = 'tile' + (digits >= 3 ? ` digits-${digits > 5 ? 'many' : digits}` : '') + (value > 2048 ? ' high-tile' : '');
+    tile.dataset.value = value;
+    tile.dataset.index = index;
+    tile.style.setProperty('--col', index % 4);
+    tile.style.setProperty('--row', Math.floor(index / 4));
+    face.className = 'tile-face';
+    face.textContent = value;
+    tile.append(face);
     if (index === spawnedIndex) tile.classList.add('spawn');
     if (mergedIndices.includes(index)) tile.classList.add('merge');
     return [tile];
   }));
-  const rows = Array.from({ length: 4 }, (_, row) => {
-    const p = document.createElement('p');
-    p.textContent = `${row + 1}行目：` + state.board.slice(row * 4, row * 4 + 4).map(n => n || '空き').join('、');
-    return p;
-  });
-  $('accessible-board').replaceChildren(...rows);
+  $('accessible-board').textContent = Array.from({ length: 4 }, (_, row) =>
+    `${row + 1}行目：${state.board.slice(row * 4, row * 4 + 4).map(n => n || '空き').join('、')}`
+  ).join('。');
 }
 
 function renderControls() {
   $('score').textContent = state.score.toLocaleString('ja-JP');
   $('best').textContent = best.toLocaleString('ja-JP');
-  $('moves').textContent = `${state.moves.toLocaleString('ja-JP')} 手`;
   $('undo-button').disabled = !previous;
   $('result-undo').hidden = !previous;
   const resultType = state.won && !state.keepPlaying ? 'win' : state.over ? 'over' : '';
@@ -73,72 +63,67 @@ function renderControls() {
   board.tabIndex = resultType ? -1 : 0;
   if (resultType) {
     const won = resultType === 'win';
-    $('result-kicker').textContent = won ? 'WELL PLAYED' : 'NICE TRY';
-    $('result-title').textContent = won ? '2048 達成！' : 'おつかれさま。';
-    $('result-description').textContent = won ? 'もう少し先の数字を、目指してみよう。' : `スコア ${state.score.toLocaleString('ja-JP')}。次のひと手を、また。`;
+    $('result-title').textContent = won ? '2048' : '終了';
     $('continue-button').hidden = !won;
     $('retry-button').hidden = won;
-    if (resultType !== lastResult && !$('new-dialog').open && !$('help-dialog').open) {
+    if (resultType !== lastResult && !dialog.open) {
       (won ? $('continue-button') : $('retry-button')).focus({ preventScroll: true });
-      $('announcement').textContent = won ? '2048達成！ 続けて遊べます。' : `ゲーム終了。スコア ${state.score}。`;
+      $('announcement').textContent = won ? '2048達成' : `ゲーム終了。スコア ${state.score}`;
     }
   }
   lastResult = resultType;
 }
 
-function finishAnimation(result = null) {
+function clearAnimation() {
   clearTimeout(animationTimer);
   animationTimer = null;
-  drawBoard(result?.spawnedIndex, result?.transitions.filter(t => t.merged).map(t => t.to));
+  for (const animation of animations) animation.cancel();
+  animations = [];
+}
+
+function finishAnimation(result) {
+  clearAnimation();
+  drawBoard(result.spawnedIndex, result.transitions.filter(t => t.merged).map(t => t.to));
   renderControls();
-  while (inputQueue.length && animationTimer === null && !$('new-dialog').open && !$('help-dialog').open) {
-    const direction = inputQueue.shift();
-    requestMove(direction);
-  }
+  while (inputQueue.length && animationTimer === null && !dialog.open) requestMove(inputQueue.shift());
+}
+
+function tilePosition(index) {
+  return `translate3d(${index % 4 * tileStep}px, ${Math.floor(index / 4) * tileStep}px, 0)`;
 }
 
 function requestMove(direction) {
-  if ($('new-dialog').open || $('help-dialog').open) return;
+  if (dialog.open) return;
   if (animationTimer !== null) {
     if (inputQueue.length < 8) inputQueue.push(direction);
     return;
   }
   const result = moveGame(state, direction);
   if (!result.changed) return;
-  const gain = result.state.score - state.score;
   previous = state;
   state = result.state;
-  persist(); // Save the completed turn before animation or any lifecycle event.
+  persist(); // Commit the entire turn before drawing or any lifecycle event.
   $('score').textContent = state.score.toLocaleString('ja-JP');
   $('best').textContent = best.toLocaleString('ja-JP');
-  if (gain) {
-    clearTimeout(gainTimer);
-    const label = $('score-gain');
-    label.classList.remove('pop');
-    label.textContent = `+${gain}`;
-    void label.offsetWidth;
-    label.classList.add('pop');
-    gainTimer = setTimeout(() => { label.textContent = ''; }, 650);
-  }
-  $('announcement').textContent = `${state.moves}手目。スコア ${state.score}。最大 ${Math.max(...state.board)}。`;
-  if (reduceMotion.matches) { finishAnimation(result); return; }
-  void tiles.offsetWidth; // Commit newly drawn tiles before a queued move animates.
+  $('announcement').textContent = `スコア ${state.score}`;
+  if (reduceMotion.matches || !board.animate) { finishAnimation(result); return; }
   for (const transition of result.transitions) {
+    if (transition.from === transition.to) continue;
     const tile = tiles.querySelector(`[data-index="${transition.from}"]`);
-    if (tile) {
-      if (transition.merged) tile.style.zIndex = '2';
-      placeTile(tile, transition.to);
-    }
+    if (!tile) continue;
+    if (transition.merged) tile.style.zIndex = '2';
+    animations.push(tile.animate([
+      { transform: tilePosition(transition.from) },
+      { transform: tilePosition(transition.to) },
+    ], { duration: 85, easing: 'ease-out', fill: 'forwards' }));
   }
-  animationTimer = setTimeout(() => finishAnimation(result), 115);
+  animationTimer = setTimeout(() => finishAnimation(result), 90);
 }
 
 function stopMotion() {
   inputQueue = [];
-  clearTimeout(animationTimer);
-  animationTimer = null;
-  clearTimeout(gainTimer);
-  $('score-gain').textContent = '';
+  clearAnimation();
+  gesture = null;
 }
 
 function undo() {
@@ -149,7 +134,7 @@ function undo() {
   persist();
   drawBoard();
   renderControls();
-  $('announcement').textContent = '1手戻しました。';
+  $('announcement').textContent = '1手戻しました';
   board.focus({ preventScroll: true });
 }
 
@@ -157,22 +142,21 @@ function openNewGame() {
   stopMotion();
   drawBoard();
   renderControls();
-  $('new-dialog').showModal();
+  dialog.showModal();
   $('cancel-new').focus();
 }
 
 $('new-button').addEventListener('click', openNewGame);
 $('retry-button').addEventListener('click', openNewGame);
-$('cancel-new').addEventListener('click', () => $('new-dialog').close());
+$('cancel-new').addEventListener('click', () => dialog.close());
 $('confirm-new').addEventListener('click', () => {
   stopMotion();
   state = createGame();
   previous = null;
   persist();
-  $('new-dialog').close();
+  dialog.close();
   drawBoard();
   renderControls();
-  $('announcement').textContent = '新しいゲームを始めました。';
   board.focus({ preventScroll: true });
 });
 $('undo-button').addEventListener('click', undo);
@@ -183,29 +167,20 @@ $('continue-button').addEventListener('click', () => {
   renderControls();
   if (!state.over) board.focus({ preventScroll: true });
 });
-$('help-button').addEventListener('click', () => {
-  stopMotion();
-  drawBoard();
-  renderControls();
-  $('help-dialog').showModal();
+dialog.addEventListener('click', (event) => {
+  if (event.target !== dialog) return;
+  const rect = dialog.getBoundingClientRect();
+  if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
 });
-$('close-help').addEventListener('click', () => $('help-dialog').close());
-for (const dialog of document.querySelectorAll('dialog')) {
-  dialog.addEventListener('click', (event) => {
-    if (event.target !== dialog) return;
-    const rect = dialog.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
-  });
-}
 
 board.addEventListener('pointerdown', (event) => {
-  if (!event.isPrimary) { gesture = null; return; }
+  if (!event.isPrimary || multiTouch) { gesture = null; return; }
   if (event.pointerType === 'mouse' && event.button !== 0) return;
   gesture = { id: event.pointerId, x: event.clientX, y: event.clientY };
   board.setPointerCapture(event.pointerId);
 });
 board.addEventListener('pointerup', (event) => {
-  if (!gesture || event.pointerId !== gesture.id) return;
+  if (!gesture || event.pointerId !== gesture.id || multiTouch) return;
   const dx = event.clientX - gesture.x;
   const dy = event.clientY - gesture.y;
   gesture = null;
@@ -214,16 +189,36 @@ board.addEventListener('pointerup', (event) => {
 });
 board.addEventListener('pointercancel', () => { gesture = null; });
 board.addEventListener('lostpointercapture', () => { gesture = null; });
-board.addEventListener('contextmenu', (event) => event.preventDefault());
+
+// iOS Safari can ignore viewport zoom limits. Suppress its gesture path as well.
+for (const name of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(name, (event) => { gesture = null; event.preventDefault(); }, { passive: false });
+}
+for (const name of ['touchstart', 'touchmove']) {
+  document.addEventListener(name, (event) => {
+    if (event.touches.length > 1) { multiTouch = true; gesture = null; event.preventDefault(); }
+  }, { passive: false });
+}
+for (const name of ['touchend', 'touchcancel']) {
+  document.addEventListener(name, (event) => {
+    if (multiTouch) { gesture = null; event.preventDefault(); }
+    if (!event.touches.length) multiTouch = false;
+  }, { passive: false });
+}
+document.addEventListener('dblclick', (event) => event.preventDefault());
+document.addEventListener('contextmenu', (event) => event.preventDefault());
+document.addEventListener('wheel', (event) => { if (event.ctrlKey) event.preventDefault(); }, { passive: false });
 document.addEventListener('keydown', (event) => {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
-  if ($('new-dialog').open || $('help-dialog').open) return;
+  if ((event.ctrlKey || event.metaKey) && ['+', '-', '=', '0'].includes(event.key)) { event.preventDefault(); return; }
+  if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing || dialog.open) return;
   const direction = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }[event.key];
   if (direction) { event.preventDefault(); requestMove(direction); }
 });
-for (const button of document.querySelectorAll('[data-direction]')) {
-  button.addEventListener('click', () => requestMove(button.dataset.direction));
-}
+for (const button of document.querySelectorAll('[data-direction]')) button.addEventListener('click', () => requestMove(button.dataset.direction));
+new ResizeObserver(([entry]) => {
+  tileStep = (entry.contentRect.width - 8) / 4;
+  if (animationTimer !== null) { stopMotion(); drawBoard(); renderControls(); }
+}).observe(board);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { stopMotion(); persist(); drawBoard(); renderControls(); }
 });
@@ -232,29 +227,4 @@ window.addEventListener('pagehide', persist);
 persist();
 drawBoard();
 renderControls();
-if (saved.status === 'unavailable' && lastSaved) $('announcement').textContent = '保存データを読み込めなかったため、新しいゲームを始めました。';
-
-if ('serviceWorker' in navigator) {
-  const offlineFailed = () => {
-    $('offline-help').textContent = 'オフラインの準備ができませんでした。通信できる状態でもう一度開いてください。';
-  };
-  $('offline-help').textContent = 'オフラインで遊ぶ準備をしています。';
-  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((registration) => {
-    const watchInstalling = () => {
-      const worker = registration.installing;
-      if (!worker) return;
-      const checkState = () => {
-        if (worker.state === 'redundant' && !registration.active) offlineFailed();
-      };
-      worker.addEventListener('statechange', checkState);
-      checkState();
-    };
-    registration.addEventListener('updatefound', watchInstalling);
-    watchInstalling();
-    return navigator.serviceWorker.ready;
-  }).then(() => {
-    $('offline-help').textContent = 'オフラインでも遊べる準備ができています。';
-  }).catch(offlineFailed);
-} else {
-  $('offline-help').textContent = 'このブラウザではオフライン起動を利用できません。';
-}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
