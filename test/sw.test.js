@@ -28,7 +28,7 @@ function worker(scope = 'https://example.com/games/2048/', precache = async () =
     },
     caches: {
       open: async () => cache,
-      keys: async () => ['unrelated-cache', 'pocket-2048-v0', 'pocket-2048-v1', 'pocket-2048-v2'],
+      keys: async () => ['unrelated-cache', 'pocket-2048-v0', 'pocket-2048-v1', 'pocket-2048-v2', 'pocket-2048-v3'],
       delete: async (name) => { deleted.push(name); },
     },
     fetch: async (request) => { fetched.push(request); return 'network'; },
@@ -88,7 +88,7 @@ test('updates activate only after every shell asset has cached successfully', as
 test('activation deletes only old game caches and claims the first loaded game', async () => {
   const w = worker();
   await dispatchLifecycle(w, 'activate');
-  assert.deepEqual(w.deleted, ['pocket-2048-v0', 'pocket-2048-v1']);
+  assert.deepEqual(w.deleted, ['pocket-2048-v0', 'pocket-2048-v1', 'pocket-2048-v2']);
   assert.equal(w.claimed, true);
 });
 
