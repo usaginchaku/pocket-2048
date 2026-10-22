@@ -18,7 +18,7 @@ let inputQueue = [];
 let gesture = null;
 let multiTouch = false;
 let lastResult = '';
-let tileStep = (board.clientWidth - 8) / 4;
+let tileStep = (board.getBoundingClientRect().width - 8) / 4;
 
 // Fixed background cells; only the sixteen small tile faces change during play.
 document.querySelector('.grid').append(...Array.from({ length: 16 }, () => {
@@ -216,7 +216,11 @@ document.addEventListener('keydown', (event) => {
 });
 for (const button of document.querySelectorAll('[data-direction]')) button.addEventListener('click', () => requestMove(button.dataset.direction));
 new ResizeObserver(([entry]) => {
-  tileStep = (entry.contentRect.width - 8) / 4;
+  const nextStep = (entry.contentRect.width - 8) / 4;
+  // The initial notification can arrive during a move without any size change.
+  // Preserve queued input when the geometry is unchanged (including rounding).
+  if (Math.abs(nextStep - tileStep) < 0.01) return;
+  tileStep = nextStep;
   if (animationTimer !== null) { stopMotion(); drawBoard(); renderControls(); }
 }).observe(board);
 document.addEventListener('visibilitychange', () => {

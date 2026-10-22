@@ -14,7 +14,7 @@ Verified on 2026-10-22 in a Linux browser test environment.
 
 ## Browser behavior
 
-Chromium and WebKit 26.0 cover 15 scenarios each: swipes, rapid queued input (including a no-op between valid moves), reload/undo, reset confirmation, win/continue, game over, screen-reader direction buttons, offline restart, denied storage, corrupt saves, single-screen layout, numeric-only visible text, zoom prevention, and GitHub Pages subpaths.
+Chromium and WebKit 26.0 cover 16 scenarios each: swipes, rapid queued input (including a no-op between valid moves and a delayed initial resize notification), reload/undo, reset confirmation, win/continue, game over, screen-reader direction buttons, offline restart, denied storage, corrupt saves, single-screen layout, numeric-only visible text, zoom prevention, and GitHub Pages subpaths.
 
 Chromium swipe tests use browser-dispatched touch events. WebKit swipe tests exercise PointerEvent handlers; they do not emulate physical iOS touch hardware.
 

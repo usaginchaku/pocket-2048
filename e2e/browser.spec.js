@@ -108,6 +108,38 @@ test('a queued no-op does not strand the valid swipe behind it', async ({ page }
   expect((await save(page)).state.moves).toBe(2);
 });
 
+test('delayed initial resize notification preserves queued moves', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.addInitScript(() => {
+    const NativeResizeObserver = window.ResizeObserver;
+    window.ResizeObserver = class {
+      constructor(callback) {
+        let first = true;
+        this.observer = new NativeResizeObserver(entries => {
+          if (first) {
+            first = false;
+            window.deliverInitialResize = () => callback(entries, this);
+          } else callback(entries, this);
+        });
+      }
+      observe(...args) { this.observer.observe(...args); }
+      unobserve(...args) { this.observer.unobserve(...args); }
+      disconnect() { this.observer.disconnect(); }
+    };
+  });
+  await seed(page);
+  await page.waitForFunction(() => typeof window.deliverInitialResize === 'function');
+  await page.evaluate(() => {
+    for (const key of ['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp']) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    }
+    window.deliverInitialResize();
+  });
+  await expectMoves(page, 4);
+  const persisted = (await save(page)).state;
+  await expect.poll(() => renderedBoard(page)).toEqual(persisted.board);
+});
+
 test('new game asks for confirmation, cancel preserves game, best survives reset', async ({ page }) => {
   await seed(page, game(basicBoard, {score: 120, moves: 12}), {best: 240});
   const initial = (await save(page)).state;
