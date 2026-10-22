@@ -1,5 +1,5 @@
 /* Bump VERSION whenever any app-shell asset changes. */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE_PREFIX = 'pocket-2048-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}`;
 const BASE = new URL('./', self.registration.scope);

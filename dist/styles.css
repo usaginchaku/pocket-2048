@@ -100,3 +100,7 @@ dialog::backdrop { background: #263c3655; }
 dialog h2 { margin: 0 0 22px; font-size: 18px; text-align: center; font-weight: 600; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
+
+/* Line breaking: avoid stray last characters */
+body{line-break:strict;text-wrap-style:pretty}
+h1,h2,h3,h4,h5,h6,button,label,summary,legend,dt,th{text-wrap-style:balance}
