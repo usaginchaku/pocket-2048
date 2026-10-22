@@ -1,0 +1,14 @@
+{
+  "name": "pocket-2048",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An ad-free, autosaving 2048 PWA for iPhone.",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test test/*.test.js",
+    "test:browser": "playwright test",
+    "check": "node --check dist/app.js && node --check dist/engine.js && node --check dist/storage.js && node --check dist/sw.js"
+  },
+  "devDependencies": {"@playwright/test": "1.58.2"}
+}

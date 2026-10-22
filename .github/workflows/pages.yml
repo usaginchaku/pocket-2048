@@ -1,0 +1,70 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Verify and package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install test dependencies
+        run: npm ci
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Test game rules, saves, and offline caching
+        run: npm test
+      - name: Install test browsers
+        run: npx playwright install --with-deps chromium webkit
+      - name: Test browser behavior
+        run: npm run test:browser
+        env:
+          RUN_WEBKIT: '1'
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      # The app is buildless: dist/ is the complete deployable website.
+      - name: Upload static website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Preserve browser failure details
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-browser-test-results
+          path: test-results/
+          if-no-files-found: ignore
+
+  deploy:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

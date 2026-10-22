@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8f6f0">
+  <meta name="description" content="ひと息ついて、2048。広告なし・自動セーブのシンプルなパズルゲーム。">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="2048">
+  <title>2048 — ひと息、ひと手。</title>
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <main class="game" aria-label="2048 パズルゲーム">
+    <header class="header">
+      <div><p class="eyebrow">ひと息、ひと手。</p><h1>2048<span class="title-dot" aria-hidden="true">.</span></h1></div>
+      <button class="icon-button" id="help-button" aria-label="遊び方とホーム画面への追加"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9a2.5 2.5 0 0 1 4.8 1c0 1.7-2.4 1.8-2.4 3.5M12 16.5v.1"/></svg></button>
+    </header>
+    <section class="scores" aria-label="スコア">
+      <div class="score-card current-score"><span class="score-label">スコア</span><strong id="score">0</strong><span id="score-gain" aria-hidden="true"></span></div>
+      <div class="score-card"><span class="score-label">ベスト</span><strong id="best">0</strong></div>
+    </section>
+    <div class="board-shell">
+      <div class="board" id="board" role="group" tabindex="0" aria-label="4×4 の盤面。上下左右にスワイプするか、矢印キーで操作" aria-describedby="instructions">
+        <div class="grid" aria-hidden="true"></div>
+        <div class="tiles" id="tiles" aria-hidden="true"></div>
+        <div class="sr-only" id="accessible-board"></div>
+      </div>
+      <div class="board-overlay" id="result" hidden>
+        <p class="result-kicker" id="result-kicker"></p>
+        <h2 id="result-title"></h2>
+        <p id="result-description"></p>
+        <button class="primary-button" id="continue-button">このまま続ける</button>
+        <button class="primary-button" id="retry-button">もう一度遊ぶ</button>
+        <button class="text-button" id="result-undo">1手戻す</button>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="secondary-button" id="undo-button" disabled><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m7 4-4 4 4 4M3 8h8a5 5 0 0 1 0 10" transform="translate(0 -2)"/></svg>1手戻す</button>
+      <button class="secondary-button" id="new-button"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>はじめから</button>
+    </div>
+    <p class="instructions" id="instructions">スワイプで動かして、同じ数字をひとつに。</p>
+    <div class="footer"><span class="save-status" id="save-status" role="status"><span class="status-dot"></span><span id="save-label">自動セーブ</span></span><span id="moves">0 手</span></div>
+    <p class="storage-warning" id="storage-warning" hidden>このブラウザでは保存できません。設定でサイトデータの保存を許可してください。</p>
+    <div class="sr-only" id="announcement" aria-live="polite" aria-atomic="true"></div>
+    <details class="accessible-controls"><summary>ボタンで操作</summary><div class="direction-pad" aria-label="方向ボタン"><button data-direction="up" aria-label="上に動かす">↑</button><button data-direction="left" aria-label="左に動かす">←</button><button data-direction="down" aria-label="下に動かす">↓</button><button data-direction="right" aria-label="右に動かす">→</button></div></details>
+    <noscript>遊ぶにはJavaScriptを有効にしてください。</noscript>
+  </main>
+  <dialog id="new-dialog" aria-labelledby="new-title">
+    <h2 id="new-title">はじめから遊ぶ？</h2>
+    <p>今のゲームはリセットされます。<br>ベストスコアは残ります。</p>
+    <div class="dialog-actions"><button class="secondary-button" id="cancel-new">戻る</button><button class="primary-button" id="confirm-new">はじめる</button></div>
+  </dialog>
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <div class="dialog-heading"><h2 id="help-title">2048 の遊び方</h2><button class="icon-button" id="close-help" aria-label="閉じる">×</button></div>
+    <p>上下左右にスワイプすると、数字がその方向へ動きます。同じ数字がぶつかると合体。<strong>2048</strong>を目指しましょう。</p>
+    <div class="merge-example" aria-label="2と2を合わせると4"><span>2</span><b>＋</b><span>2</span><b>→</b><span class="example-result">4</span></div>
+    <p>動かせなくなったらゲーム終了。「1手戻す」で、直前の操作を一度だけ戻せます。2048達成後も続けて遊べます。</p>
+    <h3>iPhoneのホーム画面へ</h3>
+    <p>Safariで開いて、共有メニューから<strong>「ホーム画面に追加」</strong>。アプリのように起動できます。</p>
+    <h3>いつでも続きから</h3>
+    <p>毎手、自動でこの端末に保存。<span id="offline-help">初回の読み込みが終われば、オフラインでも遊べます。</span> サイトデータを削除すると記録も消えます。別端末やSafariとホーム画面アプリの間での同期はありません。</p>
+    <p class="help-footnote">広告・トラッキングなし。音も鳴りません。</p>
+  </dialog>
+</body>
+</html>
